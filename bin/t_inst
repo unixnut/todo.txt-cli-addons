@@ -1,0 +1,97 @@
+#! /bin/sh
+# t_inst (Bourne shell script) -- Symlinks actions from a subdir in git repo into ~/.todo/actions
+#
+# Any action that already exists (builtin or otherwise) is put into a special
+# directory for later comparison, or testing with
+# "TODO_ACTIONS_DIR=$HOME/.todo/actions.xyz".
+#
+# TO-DO: Use SRC_SUBDIR instead of $REPO_BASEDIR/$SRC_BASEDIR and set it to $1
+#        (after shifting) if -d was present; this avoids the subdir search
+#        NOTE: whether or not -d was present, SRC_DIR can be set using SRC_SUBDIR
+
+# This makes the links always be installed into DEST_BASEDIR
+if [ "x$1" = x-s ] ; then
+  separate=y
+  shift
+fi
+
+if [ "$#" -lt 1 ] ; then
+  echo "Error: Insufficient arguments" >&2
+  exit 1
+fi
+
+TOPDIR=$HOME/.todo
+REPO_BASEDIR=$1
+REPO_DIR=$TOPDIR/actions.src/$REPO_BASEDIR
+DEST_BASEDIR=actions
+ALT_DEST_BASEDIR=actions.$REPO_BASEDIR
+INSTALLED_ACTIONS_FILE=/tmp/installed_actions_$$.txt
+AVAIL_ACTIONS_FILE=/tmp/avail_actions_$$.txt
+
+debug=0
+
+
+create_link()
+{
+  if [ ! -f "$SRC_DIR/$1" ] ; then
+    echo "Error: $1 isn't there?!" >&2
+    exit 10
+  fi
+
+  if [ -d "$SRC_DIR/$1" ] ; then
+    echo "Warning: skipping directory $1" >&2
+  elif [ ! -x "$SRC_DIR/$1" ] ; then
+    echo "Warning: skipping non-script $1" >&2
+  elif [ ! -e "$2/$1" ] ; then
+    # this is only done if the target doesn't exist
+    ln -s -v "../actions.src/$REPO_BASEDIR/$SRC_BASEDIR/$1" "$2"
+  fi
+}
+
+
+# *** MAINLINE ***
+if [ ! -d $REPO_DIR ] ; then
+  echo "Error: $REPO_DIR doesn't exist" >&2
+  exit 2
+fi
+
+cd "$TOPDIR"
+mkdir -p "$ALT_DEST_BASEDIR"
+
+# get a list of regexps matching all existing actions
+todo.sh shorthelp | sed -n 's/^    \([^ ]\+\).*/\1/p' > $INSTALLED_ACTIONS_FILE
+
+# Find out which subdir the actions are in
+for maybe in .todo.actions.d todo.actions.d actions ; do
+  if [ -d $REPO_DIR/$maybe ] ; then
+    SRC_DIR=$REPO_DIR/$maybe
+    SRC_BASEDIR=$maybe
+  fi
+done
+if [ -z "$SRC_DIR" ] ; then
+  echo "Error: Can't find actions subdir in $REPO_DIR" >&2
+  exit 3
+fi
+
+if [ -n "$separate" ] ; then
+  for l in $(ls "$SRC_DIR") ; do
+    create_link $l $ALT_DEST_BASEDIR
+  done
+else
+  # Get list of available actions
+  ls "$SRC_DIR" > $AVAIL_ACTIONS_FILE
+
+  # Handle available actions that are already present
+  for l in $(grep -E -w -f $INSTALLED_ACTIONS_FILE $AVAIL_ACTIONS_FILE) ; do
+    create_link $l $ALT_DEST_BASEDIR
+  done
+
+  # Handle new actions
+  for l in $(grep -v -E -w -f $INSTALLED_ACTIONS_FILE $AVAIL_ACTIONS_FILE) ; do
+    create_link $l $DEST_BASEDIR
+  done
+fi
+
+if [ $debug -lt 1 ] ; then
+  rm -f $INSTALLED_ACTIONS_FILE $AVAIL_ACTIONS_FILE
+fi
