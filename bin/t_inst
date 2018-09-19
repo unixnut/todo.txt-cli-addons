@@ -44,8 +44,14 @@ create_link()
     echo "Warning: skipping non-script $1" >&2
   elif [ ! -e "$2/$1" ] ; then
     # this is only done if the target doesn't exist
-    ln -s -v "../actions.src/$REPO_BASEDIR/$SRC_BASEDIR/$1" "$2"
+    ln -s -v "../actions.src/$REPO_BASEDIR/$SRC_BASEDIR/$1" "$2/$1"
   fi
+}
+
+
+test_link()
+{
+  [ -L "$2/$1" -a "$(readlink "$2"/$1)" = "../actions.src/$REPO_BASEDIR/$SRC_BASEDIR/$1" ]
 }
 
 
@@ -83,7 +89,13 @@ else
 
   # Handle available actions that are already present
   for l in $(grep -E -w -f $INSTALLED_ACTIONS_FILE $AVAIL_ACTIONS_FILE) ; do
-    create_link $l $ALT_DEST_BASEDIR
+    # ...unless they are present and point to the current target
+    if ! test_link $l $DEST_BASEDIR &&
+       [ ! -L $ALT_DEST_BASEDIR/$l ]
+    then
+      ## echo "$ALT_DEST_BASEDIR/$l ... $(readlink "$DEST_BASEDIR/$l")"
+      create_link $l $ALT_DEST_BASEDIR
+    fi
   done
 
   # Handle new actions
