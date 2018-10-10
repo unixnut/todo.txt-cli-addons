@@ -62,10 +62,10 @@ if [ ! -d $REPO_DIR ] ; then
 fi
 
 cd "$TOPDIR"
-mkdir -p "$ALT_DEST_BASEDIR"
+mkdir -p actions "$ALT_DEST_BASEDIR"
 
 # get a list of regexps matching all existing actions
-todo.sh shorthelp | sed -n 's/^    \([^ ]\+\).*/\1/p' > $INSTALLED_ACTIONS_FILE
+${TODOTXT_CMD-todo.sh} shorthelp | sed -n 's/^    \([^ ]\+\).*/\1/p' > $INSTALLED_ACTIONS_FILE
 
 # Find out which subdir the actions are in
 for maybe in .todo.actions.d todo.actions.d actions ; do
