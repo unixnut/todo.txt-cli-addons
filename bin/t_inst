@@ -9,26 +9,18 @@
 #        (after shifting) if -d was present; this avoids the subdir search
 #        NOTE: whether or not -d was present, SRC_DIR can be set using SRC_SUBDIR
 
-# This makes the links always be installed into DEST_BASEDIR
-if [ "x$1" = x-s ] ; then
-  separate=y
-  shift
-fi
 
-if [ "$#" -lt 1 ] ; then
-  echo "Error: Insufficient arguments" >&2
-  exit 1
-fi
+# *** FUNCTIONS ***
+warning()
+{
+  echo "t_inst: Warning: $*" >&2
+}
 
-TOPDIR=$HOME/.todo
-REPO_BASEDIR=$1
-REPO_DIR=$TOPDIR/actions.src/$REPO_BASEDIR
-DEST_BASEDIR=actions
-ALT_DEST_BASEDIR=actions.$REPO_BASEDIR
-INSTALLED_ACTIONS_FILE=/tmp/installed_actions_$$.txt
-AVAIL_ACTIONS_FILE=/tmp/avail_actions_$$.txt
 
-debug=0
+error()
+{
+  echo "t_inst: ERROR: $*" >&2
+}
 
 
 create_link()
@@ -56,16 +48,51 @@ test_link()
 
 
 # *** MAINLINE ***
+# This makes the links always be installed into DEST_BASEDIR
+if [ "x$1" = x-s ] ; then
+  separate=y
+  shift
+fi
+
+if [ "$#" -lt 1 ] ; then
+  echo "Error: Insufficient arguments" >&2
+  exit 1
+fi
+
+TOPDIR=$HOME/.todo
+REPO_BASEDIR=$1
+REPO_DIR=$TOPDIR/actions.src/$REPO_BASEDIR
+DEST_BASEDIR=actions
+ALT_DEST_BASEDIR=actions.$REPO_BASEDIR
+INSTALLED_ACTIONS_FILE=/tmp/installed_actions_$$.txt
+AVAIL_ACTIONS_FILE=/tmp/avail_actions_$$.txt
+
+debug=0
+
+
+# == Preparation ==
 if [ ! -d $REPO_DIR ] ; then
   echo "Error: $REPO_DIR doesn't exist" >&2
   exit 2
 fi
 
+if TODO_FULL_SH=$(which todo.sh 2>/dev/null)
+then
+  :
+elif [ -f /usr/bin/todo-txt ] ; then
+  TODO_FULL_SH=/usr/bin/todo-txt
+else
+  error "Can't find todo.sh"
+  exit 4
+fi
+
+
+# == Processing ==
 cd "$TOPDIR"
 mkdir -p actions "$ALT_DEST_BASEDIR"
 
 # get a list of regexps matching all existing actions
-${TODOTXT_CMD-todo.sh} shorthelp | sed -n 's/^    \([^ ]\+\).*/\1/p' > $INSTALLED_ACTIONS_FILE
+"$TODO_FULL_SH" shorthelp | sed -n 's/^    \([^ ]\+\).*/\1/p' > $INSTALLED_ACTIONS_FILE
 
 # Find out which subdir the actions are in
 for maybe in .todo.actions.d todo.actions.d actions ; do
