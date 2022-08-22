@@ -1,0 +1,131 @@
+#!/usr/bin/env bash
+
+# Other tag string creation commands:
+#   pwgen
+#   apg -M nlc -m 8 -x 8
+#   expect_mkpasswd
+
+
+# *** DEFINITIONS ***
+TODOTXT_MARKER_PATTERN='^[[:graph:]]:[0-9]+$'
+
+
+# *** FUNCTIONS ***
+cleanup()
+{
+  rm -f "$tagged_file"
+}
+
+
+extract_references()
+{
+  # TO-DO: Speed up by using `set` with a partially-quoted string and `${...#*:}`
+  awk -v "markerPattern=$TODOTXT_MARKER_PATTERN" \
+      '{ for (i = 1; i <= NF; ++i)
+         {
+           if ($i ~ markerPattern)
+           {
+             match($i, /[0-9]+/)
+             num = substr($i, RSTART, RLENGTH) + 0
+             print(num)
+           }
+         }
+       }'
+}
+
+
+archive_done_item()
+{
+  # TO-DO: wrap calling block in a subshell that uses a special file descriptor
+  # and output to that
+  ## echo "[$*]" >&2
+  echo "$*" >> "$DONE_FILE"
+}
+
+
+# *** MAINLINE ***
+[ "$1" = "usage" ] && exit 0
+shift
+
+set -e
+
+## subsubcommand=$1
+## trap 'cleanup' exit
+
+## if [ $subsubcommand = prep ] ; then
+##   ...
+## "$TODO_SH" listcon "$@"
+
+mapfile -t lines < $TODO_FILE
+## echo "${#lines[@]}"
+## echo "${lines[6]}"
+
+declare -A old_linenum_mapping
+declare -a lines_remaining
+
+# First pass: create line mapping associative array and dispose of non-current lines
+declare -i i=0 num_lines=${#lines[@]} num_lines_remaining=0
+while ((i < num_lines)) ; do
+  line="${lines[i]}"
+  case "$line" in
+    x*)
+      archive_done_item "$line"
+      ;;
+
+    "")
+      # blank line
+      ;;
+
+    *)
+      lines_remaining[num_lines_remaining++]="$line"
+      # old linenum -> new linenum
+      let tag=i+1
+      old_linenum_mapping[$tag]="$num_lines_remaining"
+      echo "$tag -> $num_lines_remaining" >&2
+      ;;
+  esac
+
+  let ++i
+done
+
+# Second pass: rewrite markers
+i=0
+while ((i < num_lines_remaining)) ; do
+  ## echo -n .
+  case "${lines_remaining[i]}" in
+    *\ ?:*)
+      # Get a list of line numbers referenced by markers in the line
+      references=( $(echo "${lines_remaining[i]}" | extract_references) )
+      if [ ${#references[@]} -gt 0 ] ; then
+        echo "${lines_remaining[i]}" |
+          sed $(j=0
+                while ((j < ${#references[@]})) ; do
+                  # If the line was non-empty; there will be a mapping for its referenced line
+                  tag=${references[j]}
+                  if [ "${references[j]}" = "${old_linenum_mapping[$tag]}" ] ; then
+                    printf ' -e #'  # no-op
+                  elif [ -n "${old_linenum_mapping[$tag]}" ] ; then
+                    # ...so substitute it
+                    printf ' -e s/:%s\>/:%s/' "${references[j]}" "${old_linenum_mapping[$tag]}"
+                  else
+                    # ...or if not, delete the marker
+                    printf ' -e s/[[:space:]][[:graph:]]:%s//' "${references[j]}"
+                  fi
+                  let ++j
+                done)
+      else
+        echo "${lines_remaining[i]}"
+      fi
+      ;;
+
+    *)
+      echo "${lines_remaining[i]}"
+      ;;
+  esac
+
+  let ++i
+done
+
+if [ $TODOTXT_VERBOSE -gt 0 ]; then
+    echo "TODO: $TODO_FILE archived."
+fi
